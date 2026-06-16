@@ -1,0 +1,896 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  GUEST
+  TENANT
+  OWNER
+  ARTISAN
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum PropertyType {
+  HOUSE
+  APARTMENT
+  LAND
+  COMMERCIAL
+  OFFICE
+}
+
+enum PropertyStatus {
+  FOR_RENT
+  FOR_SALE
+  SOLD
+  RENTED
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum ServiceCategory {
+  ARCHITECTURE
+  CONSTRUCTION
+  SURVEYING
+  INTERIOR_DESIGN
+  ELECTRICAL
+  PLUMBING
+  PAINTING
+  LANDSCAPING
+  CARPENTRY
+  ROOFING
+  RENOVATION
+  INSPECTION
+}
+
+enum ServiceStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum BidStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  STRIPE
+  PAYSTACK
+  BANK_TRANSFER
+}
+
+enum ChatMessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id                    String                 @id @default(cuid())
+  email                 String                 @unique
+  emailVerified         DateTime?
+  phone                 String?                @unique
+  phoneVerified         DateTime?
+  firstName             String?
+  lastName              String?
+  displayName           String?
+  avatar                String?                // URL to avatar image
+  bio                   String?
+  role                  UserRole               @default(TENANT)
+  passwordHash          String?
+  
+  // Verification & KYC
+  verificationStatus    VerificationStatus     @default(PENDING)
+  verificationDocument  String?                // URL to ID/document
+  verificationSubmittedAt DateTime?
+  verificationApprovedAt DateTime?
+  kycApproved           Boolean                @default(false)
+  
+  // Location & Contact
+  address               String?
+  city                  String?
+  state                 String?
+  country               String?
+  zipCode               String?
+  latitude              Float?
+  longitude             Float?
+  timezone              String?                @default("UTC")
+  
+  // Preferences
+  language              String                 @default("en")
+  currency              String                 @default("NGN")
+  darkMode              Boolean                @default(false)
+  notificationsEnabled  Boolean                @default(true)
+  
+  // Account Status
+  isActive              Boolean                @default(true)
+  isSuspended           Boolean                @default(false)
+  suspensionReason      String?
+  suspensionDate        DateTime?
+  
+  // Relationships
+  tenantProfile         TenantProfile?
+  ownerProfile          OwnerProfile?
+  artisanProfile        ArtisanProfile?
+  
+  // Properties (for owners)
+  properties            Property[]
+  
+  // Services (for artisans)
+  services              Service[]
+  
+  // Bids (for artisans)
+  bids                  Bid[]
+  
+  // Reviews given
+  reviewsGiven          Review[]               @relation("reviewer")
+  
+  // Favorites
+  favoriteProperties    FavoriteProperty[]
+  favoriteArtisans      FavoriteArtisan[]
+  
+  // Saved searches
+  savedSearches         SavedSearch[]
+  
+  // Chat
+  chatConversations     ChatConversation[]     @relation("participants")
+  chatMessages          ChatMessage[]          @relation("sender")
+  
+  // Transactions
+  transactions          Transaction[]
+  
+  // Wallet
+  wallet                Wallet?
+  walletTransactions    WalletTransaction[]
+  
+  // Notifications
+  notifications         Notification[]
+  
+  // Timestamps
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  lastLoginAt           DateTime?
+  
+  @@index([email])
+  @@index([role])
+  @@index([verificationStatus])
+  @@index([isActive])
+  @@index([city])
+}
+
+model TenantProfile {
+  id                    String                 @id @default(cuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  occupationType        String?                // Student, Professional, Family, etc.
+  moveInDate            DateTime?
+  moveOutDate           DateTime?
+  preferredPropertyType PropertyType?
+  preferredBudgetMin    Int?
+  preferredBudgetMax    Int?
+  
+  // Application history
+  applicationsSubmitted Int                    @default(0)
+  applicationsApproved  Int                    @default(0)
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([userId])
+}
+
+model OwnerProfile {
+  id                    String                 @id @default(cuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  companyName           String?
+  companyRegistration   String?
+  numberOfProperties    Int                    @default(0)
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([userId])
+}
+
+model ArtisanProfile {
+  id                    String                 @id @default(cuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  businessName          String?
+  businessRegistration  String?
+  yearsOfExperience     Int?                   @default(1)
+  specializations       String[]               // Array of service categories
+  licenseCertification  String?                // URL to license/cert
+  businessPhoto        String?                // URL to business photo
+  
+  // Verification details
+  nationalId            String?                @unique
+  nationalIdUrl         String?
+  businessLicense       String?                @unique
+  businessLicenseUrl    String?
+  
+  // Ratings & Performance
+  averageRating         Float                  @default(0)
+  totalReviews          Int                    @default(0)
+  totalCompleted        Int                    @default(0)
+  totalEarnings         Decimal                @default(0)
+  
+  // Account status
+  isVerified            Boolean                @default(false)
+  isFeatured            Boolean                @default(false)
+  responseTime          Int?                   // in hours
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([userId])
+  @@index([isVerified])
+  @@index([specializations])
+}
+
+// ============================================
+// PROPERTIES
+// ============================================
+
+model Property {
+  id                    String                 @id @default(cuid())
+  ownerId               String
+  owner                 User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  title                 String
+  description           String                 @db.Text
+  propertyType          PropertyType
+  status                PropertyStatus         @default(FOR_RENT)
+  
+  // Location
+  address               String
+  city                  String
+  state                 String
+  country               String
+  zipCode               String?
+  latitude              Float
+  longitude             Float
+  
+  // Details
+  bedrooms              Int
+  bathrooms            Decimal                // Can be 1.5, 2.5, etc.
+  squareFeet           Int?
+  yearBuilt            Int?
+  parkingSpaces         Int?                   @default(0)
+  hasGarden            Boolean                @default(false)
+  hasBalcony           Boolean                @default(false)
+  hasPool              Boolean                @default(false)
+  hasGym               Boolean                @default(false)
+  hasSecurity          Boolean                @default(false)
+  hasBorehole          Boolean                @default(false)
+  hasGenerator         Boolean                @default(false)
+  
+  // Pricing
+  rentalPrice           Decimal?
+  salePrice             Decimal?
+  currency              String                 @default("NGN")
+  pricePerUnit          String?                // "monthly", "yearly"
+  commission            Decimal                @default(0.1)  // 10% by default
+  
+  // Media
+  images                String[]               // Array of image URLs
+  videos                String[]               // Array of video URLs
+  floorPlan             String?                // URL to floor plan
+  has3DTour             Boolean                @default(false)
+  
+  // Availability
+  availableFrom         DateTime?
+  availableUntil        DateTime?
+  
+  // Moderation
+  isApproved            Boolean                @default(false)
+  approvedAt            DateTime?
+  rejectionReason       String?
+  isArchived            Boolean                @default(false)
+  archivedAt            DateTime?
+  
+  // Metadata
+  views                 Int                    @default(0)
+  favorites             Int                    @default(0)
+  
+  // Relationships
+  applications          PropertyApplication[]
+  offers                PropertyOffer[]
+  favoriteBy            FavoriteProperty[]
+  reviews               Review[]               @relation("propertyReviews")
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  publishedAt           DateTime?
+  
+  @@index([ownerId])
+  @@index([propertyType])
+  @@index([status])
+  @@index([city])
+  @@index([isApproved])
+  @@fulltext([title, description])
+}
+
+model PropertyApplication {
+  id                    String                 @id @default(cuid())
+  propertyId            String
+  property              Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  applicantId           String
+  applicant             User                   @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  
+  status                ApplicationStatus      @default(SUBMITTED)
+  coverLetter           String?                @db.Text
+  employmentStatus      String?
+  monthlyIncome         Decimal?
+  noticePeriod          Int?                   // in days
+  moveInDate            DateTime?
+  
+  // Attached documents
+  documents             String[]               // URLs to PDF documents
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  submittedAt           DateTime               @default(now())
+  reviewedAt            DateTime?
+  
+  @@unique([propertyId, applicantId])
+  @@index([propertyId])
+  @@index([applicantId])
+  @@index([status])
+}
+
+model PropertyOffer {
+  id                    String                 @id @default(cuid())
+  propertyId            String
+  property              Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  buyerId               String
+  buyer                 User                   @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  
+  status                OfferStatus            @default(PENDING)
+  offeredPrice          Decimal
+  closingDate           DateTime?
+  contingencies         String?                @db.Text
+  notes                 String?                @db.Text
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  expiresAt             DateTime
+  
+  @@unique([propertyId, buyerId])
+  @@index([propertyId])
+  @@index([buyerId])
+  @@index([status])
+}
+
+model FavoriteProperty {
+  id                    String                 @id @default(cuid())
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  propertyId            String
+  property              Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  createdAt             DateTime               @default(now())
+  
+  @@unique([userId, propertyId])
+  @@index([userId])
+}
+
+model SavedSearch {
+  id                    String                 @id @default(cuid())
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name                  String
+  searchQuery           Json                   // Saved filter parameters
+  priceMin              Int?
+  priceMax              Int?
+  city                  String?
+  propertyType          PropertyType?
+  bedrooms              Int?
+  bathrooms            Decimal?
+  
+  isActive              Boolean                @default(true)
+  notifyOnMatch         Boolean                @default(true)
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([userId])
+}
+
+// ============================================
+// ARTISAN SERVICES
+// ============================================
+
+model Service {
+  id                    String                 @id @default(cuid())
+  artisanId             String
+  artisan               User                   @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+  
+  category              ServiceCategory
+  subcategory           String                 // e.g., "Electrical Wiring", "House Painting"
+  title                 String
+  description           String                 @db.Text
+  
+  basePrice             Decimal?
+  currency              String                 @default("NGN")
+  priceType             String                 @default("fixed")  // "fixed" or "hourly"
+  
+  // Scope
+  includedServices      String[]               // Array of included items
+  excludedServices      String[]               // Array of excluded items
+  
+  // Media
+  images                String[]               // Portfolio images
+  videoUrl              String?
+  
+  // Metadata
+  estimatedDuration     String?                // e.g., "2-3 days"
+  deliveryTime          Int?                   // in days
+  
+  // Status & Visibility
+  isActive              Boolean                @default(true)
+  isFeatured            Boolean                @default(false)
+  
+  // Ratings
+  averageRating         Float                  @default(0)
+  totalOrders           Int                    @default(0)
+  
+  // Relationships
+  bids                  Bid[]
+  projects              Project[]
+  reviews               Review[]               @relation("serviceReviews")
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([artisanId])
+  @@index([category])
+  @@index([isActive])
+}
+
+model Project {
+  id                    String                 @id @default(cuid())
+  clientId              String
+  client                User                   @relation(fields: [clientId], references: [id], onDelete: Cascade) @ignore
+  
+  title                 String
+  description           String                 @db.Text
+  category              ServiceCategory
+  budget                Decimal?
+  currency              String                 @default("NGN")
+  deadline              DateTime?
+  
+  // Location
+  address               String?
+  city                  String?
+  state                  String?
+  latitude              Float?
+  longitude             Float?
+  
+  // Media
+  attachments           String[]               // URLs to project files/images
+  
+  status                ServiceStatus          @default(OPEN)
+  acceptedBidId         String?
+  acceptedBid           Bid?                   @relation(fields: [acceptedBidId], references: [id])
+  
+  // Relationships
+  bids                  Bid[]                  @relation("projectBids")
+  services              Service[]
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  completedAt           DateTime?
+  
+  @@index([clientId])
+  @@index([category])
+  @@index([status])
+}
+
+model Bid {
+  id                    String                 @id @default(cuid())
+  projectId             String
+  project               Project                @relation("projectBids", fields: [projectId], references: [id], onDelete: Cascade)
+  
+  artisanId             String
+  artisan               User                   @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+  
+  serviceId             String?
+  service               Service?               @relation(fields: [serviceId], references: [id])
+  
+  status                BidStatus              @default(SUBMITTED)
+  bidAmount             Decimal
+  currency              String                 @default("NGN")
+  proposedDelivery      DateTime?
+  coverLetter           String?                @db.Text
+  
+  acceptedAt            DateTime?
+  rejectedAt            DateTime?
+  
+  // If this bid is accepted, it becomes a transaction
+  transaction           Transaction?
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@unique([projectId, artisanId])
+  @@index([projectId])
+  @@index([artisanId])
+  @@index([status])
+}
+
+model FavoriteArtisan {
+  id                    String                 @id @default(cuid())
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  artisanId             String
+  artisan               User                   @relation(fields: [artisanId], references: [id], onDelete: Cascade) @ignore
+  
+  createdAt             DateTime               @default(now())
+  
+  @@unique([userId, artisanId])
+  @@index([userId])
+}
+
+// ============================================
+// REVIEWS & RATINGS
+// ============================================
+
+model Review {
+  id                    String                 @id @default(cuid())
+  
+  reviewerId            String
+  reviewer              User                   @relation("reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  
+  // Reviewed entity (can be property, service, or artisan)
+  propertyId            String?
+  property              Property?              @relation("propertyReviews", fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  serviceId             String?
+  service               Service?               @relation("serviceReviews", fields: [serviceId], references: [id], onDelete: Cascade)
+  
+  artisanId             String?
+  // Note: Direct user review relationship handled differently
+  
+  // Review content
+  rating                Int                    // 1-5 stars
+  title                 String?
+  comment               String?                @db.Text
+  
+  // Aspects for services/artisans
+  qualityRating         Int?                   // 1-5
+  communicationRating   Int?                   // 1-5
+  timelinessRating      Int?                   // 1-5
+  valueForMoneyRating   Int?                   // 1-5
+  
+  // Photos of completed work
+  images                String[]
+  
+  status                String                 @default("approved") // "pending", "approved", "rejected"
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([reviewerId])
+  @@index([propertyId])
+  @@index([serviceId])
+  @@index([artisanId])
+}
+
+// ============================================
+// TRANSACTIONS & PAYMENTS
+// ============================================
+
+model Transaction {
+  id                    String                 @id @default(cuid())
+  referenceId           String                 @unique  // External payment reference
+  
+  // Parties involved
+  buyerId               String
+  buyer                 User                   @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  
+  // Transaction context
+  propertyId            String?
+  property              Property?              @relation(fields: [propertyId], references: [id])
+  
+  bidId                 String?                @unique
+  bid                   Bid?                   @relation(fields: [bidId], references: [id])
+  
+  // Amount
+  amount                Decimal
+  currency              String                 @default("NGN")
+  platformCommission    Decimal                @default(0)
+  commissionPercentage  Decimal                @default(0.1)
+  netAmount             Decimal  
+  
+  // Payment
+  paymentMethod         PaymentMethod
+  status                TransactionStatus      @default(PENDING)
+  paymentProof          String?                // URL to payment receipt
+  
+  // Escrow details (if applicable)
+  isEscrow              Boolean                @default(false)
+  escrowReleaseDate     DateTime?
+  escrowStatus          String?                // "held", "released", "disputed"
+  
+  // Metadata
+  description           String?
+  notes                 String?                @db.Text
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  processedAt           DateTime?
+  completedAt           DateTime?
+  
+  @@index([buyerId])
+  @@index([status])
+  @@index([paymentMethod])
+}
+
+model Wallet {
+  id                    String                 @id @default(cuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  balance               Decimal                @default(0)
+  currency              String                 @default("NGN")
+  
+  totalEarned           Decimal                @default(0)
+  totalWithdrawn        Decimal                @default(0)
+  totalDisputed         Decimal                @default(0)
+  
+  lastWithdrawalAt      DateTime?
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id                    String                 @id @default(cuid())
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type                  String                 // "deposit", "withdrawal", "commission_deduction", "refund"
+  amount                Decimal
+  currency              String                 @default("NGN")
+  status                String                 @default("pending")  // "pending", "completed", "failed"
+  
+  reference             String?                @unique
+  description           String?
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+}
+
+// ============================================
+// CHAT & MESSAGING
+// ============================================
+
+model ChatConversation {
+  id                    String                 @id @default(cuid())
+  
+  participant1Id        String
+  participant1          User                   @relation("participants", fields: [participant1Id], references: [id], onDelete: Cascade)
+  
+  participant2Id        String
+  
+  subject               String?
+  isActive              Boolean                @default(true)
+  
+  lastMessageAt         DateTime?
+  lastMessage           String?                @db.Text
+  
+  messages              ChatMessage[]
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@unique([participant1Id, participant2Id])
+  @@index([participant1Id])
+  @@index([participant2Id])
+}
+
+model ChatMessage {
+  id                    String                 @id @default(cuid())
+  conversationId        String
+  conversation          ChatConversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  senderId              String
+  sender                User                   @relation("sender", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  message               String                 @db.Text
+  status                ChatMessageStatus      @default(SENT)
+  
+  attachments           String[]               // URLs to media files
+  
+  readAt                DateTime?
+  deliveredAt           DateTime?
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id                    String                 @id @default(cuid())
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type                  String                 // "property_application", "message", "bid_received", etc.
+  title                 String
+  message               String                 @db.Text
+  
+  actionUrl             String?
+  metadata              Json?
+  
+  isRead                Boolean                @default(false)
+  readAt                DateTime?
+  
+  createdAt             DateTime               @default(now())
+  
+  @@index([userId])
+  @@index([isRead])
+}
+
+// ============================================
+// ADMIN & MODERATION
+// ============================================
+
+model VerificationRequest {
+  id                    String                 @id @default(cuid())
+  userId                String                 @unique
+  
+  documentType          String                 // "national_id", "driver_license", "passport"
+  documentUrl           String
+  documentHash          String?                @unique
+  
+  status                VerificationStatus     @default(PENDING)
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  reviewNotes           String?                @db.Text
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  expiresAt             DateTime?
+  
+  @@index([userId])
+  @@index([status])
+}
+
+model ArtisanVerificationRequest {
+  id                    String                 @id @default(cuid())
+  artisanId             String                 @unique
+  
+  licenseCertificateUrl String
+  businessRegistrationUrl String?
+  workPortfolioUrl      String?
+  referenceDocumentsUrl String[]?
+  
+  status                VerificationStatus     @default(PENDING)
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  reviewNotes           String?                @db.Text
+  approvalScore         Int?                   // 1-100
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  expiresAt             DateTime?
+  
+  @@index([artisanId])
+  @@index([status])
+}
+
+model Dispute {
+  id                    String                 @id @default(cuid())
+  transactionId         String
+  transaction           Transaction            @relation(fields: [transactionId], references: [id])
+  
+  initiatedBy           String
+  initiatedByUser       User                   @relation(fields: [initiatedBy], references: [id]) @ignore
+  
+  reason                String
+  description           String                 @db.Text
+  evidence              String[]               // URLs to supporting documents
+  
+  status                String                 @default("open") // "open", "in_review", "resolved", "escalated"
+  resolutionNotes       String?                @db.Text
+  resolution            String?                // "refund", "approved", "denied"
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  resolvedAt            DateTime?
+  
+  @@index([transactionId])
+  @@index([initiatedBy])
+  @@index([status])
+}
+
+model AdminLog {
+  id                    String                 @id @default(cuid())
+  adminId               String
+  adminUser             User                   @relation(fields: [adminId], references: [id]) @ignore
+  
+  action                String                 // "approved_artisan", "suspended_user", "resolved_dispute", etc.
+  entityType            String                 // "user", "property", "artisan", "dispute"
+  entityId              String
+  details               Json?
+  
+  createdAt             DateTime               @default(now())
+  
+  @@index([adminId])
+  @@index([action])
+  @@index([entityType])
+}
