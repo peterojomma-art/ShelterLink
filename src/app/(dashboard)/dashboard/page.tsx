@@ -5,7 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -13,206 +13,140 @@ export default function DashboardPage() {
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p>Loading...</p>
-        </div>
+        <p>Loading...</p>
       </div>
     );
   }
 
-  if (status === 'unauthenticated') {
+  if (!session) {
     redirect('/auth/login');
   }
 
-  const user = session?.user as any;
+  const userRole = (session.user as any).role;
+
+  const dashboardLinks = {
+    TENANT: [
+      { href: '/dashboard/tenant/applications', label: 'My Applications' },
+      { href: '/dashboard/tenant/favorites', label: 'Saved Properties' },
+      { href: '/dashboard/tenant/messages', label: 'Messages' },
+    ],
+    OWNER: [
+      { href: '/dashboard/owner/properties', label: 'My Properties' },
+      { href: '/dashboard/owner/applications', label: 'Applications' },
+      { href: '/dashboard/owner/messages', label: 'Messages' },
+    ],
+    ARTISAN: [
+      { href: '/dashboard/artisan/services', label: 'My Services' },
+      { href: '/dashboard/artisan/projects', label: 'Projects & Bids' },
+      { href: '/dashboard/artisan/earnings', label: 'Earnings' },
+    ],
+    ADMIN: [
+      { href: '/dashboard/admin/users', label: 'Manage Users' },
+      { href: '/dashboard/admin/verifications', label: 'Verifications' },
+      { href: '/dashboard/admin/properties', label: 'Properties' },
+    ],
+  };
+
+  const links = dashboardLinks[userRole as keyof typeof dashboardLinks] || [];
 
   return (
-    <div className="min-h-screen bg-muted">
-      {/* Header */}
-      <header className="bg-background border-b border-border sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">ShelterLink Dashboard</h1>
-          <Button variant="ghost" onClick={() => signOut()}>
-            Logout
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
+    <div className="min-h-screen bg-muted/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
         <div className="mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">
-                    Welcome back, {user?.name || user?.email}!
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Role: <Badge>{user?.role}</Badge>
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <h1 className="text-3xl font-bold mb-2">
+            Welcome, {session.user?.name}!
+          </h1>
+          <p className="text-muted-foreground">
+            Role: <span className="font-semibold capitalize">{userRole.toLowerCase()}</span>
+          </p>
         </div>
 
-        {/* Role-based Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {user?.role === 'OWNER' && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">My Properties</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">0</p>
-                  <p className="text-sm text-muted-foreground mt-2">Properties listed</p>
+        {/* Quick Links */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {links.map((link) => (
+            <Link key={link.href} href={link.href}>
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+                <CardContent className="pt-6">
+                  <p className="font-semibold text-center">{link.label}</p>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Applications</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">0</p>
-                  <p className="text-sm text-muted-foreground mt-2">New applications</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Earnings</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">₦0</p>
-                  <p className="text-sm text-muted-foreground mt-2">Total earnings</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {user?.role === 'ARTISAN' && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">My Services</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">0</p>
-                  <p className="text-sm text-muted-foreground mt-2">Services offered</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Projects</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">0</p>
-                  <p className="text-sm text-muted-foreground mt-2">Ongoing projects</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Wallet</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">₦0</p>
-                  <p className="text-sm text-muted-foreground mt-2">Available balance</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {user?.role === 'TENANT' && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Saved Properties</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">0</p>
-                  <p className="text-sm text-muted-foreground mt-2">In favorites</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Applications</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">0</p>
-                  <p className="text-sm text-muted-foreground mt-2">Submitted</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Messages</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">0</p>
-                  <p className="text-sm text-muted-foreground mt-2">Unread</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
+            </Link>
+          ))}
         </div>
 
-        {/* Quick Actions */}
+        {/* Main Content */}
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle>Dashboard</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {user?.role === 'OWNER' && (
-                <>
-                  <Button className="w-full">Post Property</Button>
-                  <Button variant="outline" className="w-full">
-                    View Applications
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    View Earnings
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Settings
-                  </Button>
-                </>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-blue-700">
+                  Welcome to your ShelterLink dashboard! Here you can manage your activities based on your role.
+                </p>
+              </div>
+
+              {/* Role-specific content */}
+              {userRole === 'TENANT' && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Tenant Dashboard</h3>
+                  <p className="text-muted-foreground">
+                    Browse properties, submit applications, and track your housing search in one place.
+                  </p>
+                  <Link href="/properties">
+                    <Button>Browse Properties</Button>
+                  </Link>
+                </div>
               )}
 
-              {user?.role === 'ARTISAN' && (
-                <>
-                  <Button className="w-full">Add Service</Button>
-                  <Button variant="outline" className="w-full">
-                    View Bids
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Withdraw Earnings
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Settings
-                  </Button>
-                </>
+              {userRole === 'OWNER' && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Property Owner Dashboard</h3>
+                  <p className="text-muted-foreground">
+                    List your properties, review applications, and manage your rentals or sales.
+                  </p>
+                  <Link href="/dashboard/owner/properties/new">
+                    <Button>Post New Property</Button>
+                  </Link>
+                </div>
               )}
 
-              {user?.role === 'TENANT' && (
-                <>
-                  <Button className="w-full">Browse Properties</Button>
-                  <Button variant="outline" className="w-full">
-                    View Applications
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Browse Services
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Settings
-                  </Button>
-                </>
+              {userRole === 'ARTISAN' && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Artisan Dashboard</h3>
+                  <p className="text-muted-foreground">
+                    Showcase your services, bid on projects, and grow your business on ShelterLink.
+                  </p>
+                  <Link href="/dashboard/artisan/services/new">
+                    <Button>Add Service</Button>
+                  </Link>
+                </div>
+              )}
+
+              {userRole === 'ADMIN' && (
+                <div className="space-y-4">
+                  <h3 className="font-semibold">Admin Dashboard</h3>
+                  <p className="text-muted-foreground">
+                    Manage platform users, verify artisans, and moderate content.
+                  </p>
+                </div>
               )}
             </div>
           </CardContent>
         </Card>
-      </main>
+
+        {/* Logout */}
+        <div className="mt-8 text-center">
+          <Button
+            variant="outline"
+            onClick={() => signOut({ callbackUrl: '/' })}
+          >
+            Sign Out
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
